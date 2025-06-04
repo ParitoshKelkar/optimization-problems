@@ -13,6 +13,7 @@ class TireProps
         double Cx_r,Cy_r,Ex_r,Ey_r; 
 
         TireProps(int surface = 1);
+        Eigen::Vector2d pacjeka_tire_model(double slip_angle,double slip_ratio,double force_Z,bool tire_option,double epsilon);
 };
 
 struct VehicleParams

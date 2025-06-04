@@ -70,6 +70,36 @@ TireProps::TireProps(int surface)
             };
 };
 
+Eigen::Vector2d TireProps::pacjeka_tire_model(double slip_angle,double slip_ratio,double force_Z,bool tire_option, double epsilon)
+{
+    double mu_x, mu_y, Bx,By, Cx, Cy, Ex,Ey;
+
+    if(!tire_option)
+    {
+         mu_x= this->mu_x_f, mu_y= this->mu_y_f;     
+         Bx = this->Bx_f, By = this->By_f;
+         Cx = this->Cx_f, Cy = this->Cy_f;
+         Ex = this->Ex_f, Ey = this->Ey_f;
+    }
+    else
+    {
+         mu_x= this->mu_x_r, mu_y= this->mu_y_r;
+         Bx = this->Bx_r, By = this->By_r;
+         Cx = this->Cx_r, Cy = this->Cy_r;
+         Ex = this->Ex_r, Ey = this->Ey_r;
+    };
+    Eigen::Vector2d F;
+    
+    // Longitudinal tire force
+    F(0) = mu_x*force_Z*sin(Cx*atan(Bx*(1-Ex)*slip_ratio+Ex*std::atan(Bx*slip_ratio)));
+
+    // Lateral tire force
+    F(1)= mu_y*force_Z*sin(Cy*atan(By*(1-Ey)*slip_angle+Ey*atan(By*slip_angle)));
+
+    // Tire curve coupling
+    F(1) = F(1)*sqrt(1-((F(0)/(mu_x*force_Z))*(F(0)/(mu_x*force_Z)))+epsilon); 
+};
+
 Plant::Plant(const VehicleParams& params) : params(params){};
 
 double Plant::sign_sigmoid(double V)
@@ -144,5 +174,17 @@ double Plant::simulateForward(const double& steering_ang, const std::vector<doub
             double alphadot3= -Vx3/(this->params.sig*(alpha3+alpha3_aux));
             double alphadot4= -Vx4/(this->params.sig*(alpha4+alpha4_aux));
 
-            // Slip ratios - To be contd..
+            // Slip ratios
+            double kappa1= this->slip_ratio(Vx1,omega1);
+            double kappa2= this->slip_ratio(Vx2,omega2);
+            double kappa3= this->slip_ratio(Vx3,omega3);
+            double kappa4= this->slip_ratio(Vx4,omega4);
+
+            // Tire forces
+            Eigen::Vector2d F1 = this->params.tire.pacjeka_tire_model(alpha1,kappa1,Fz1,false,this->params.epsilon);
+            Eigen::Vector2d F2 = this->params.tire.pacjeka_tire_model(alpha2,kappa2,Fz2,false,this->params.epsilon);
+            Eigen::Vector2d F3 = this->params.tire.pacjeka_tire_model(alpha3,kappa3,Fz3,false,this->params.epsilon);
+            Eigen::Vector2d F4 = this->params.tire.pacjeka_tire_model(alpha4,kappa4,Fz4,false,this->params.epsilon);
+
+            // Need to rotate front tire forces with steering angle - To be contd..
         };
