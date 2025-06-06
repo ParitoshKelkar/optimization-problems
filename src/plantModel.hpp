@@ -1,6 +1,7 @@
 #include <Eigen>
 #include <Vector>
 #include <cmath>
+#include <memory>
 
 const double g = 9.8056;
 
@@ -27,9 +28,8 @@ struct VehicleParams
     double K_theta, D_theta; // Pitch stiffness, pitch damping
     double K_phif, K_phir, K_phi, D_phif,D_phir, D_phi; // Roll stiffness and roll damping
     double epsilon, scale; // Integration integrity constants
-    TireProps tire;
-
-    VehicleParams(int surface):tire(surface){};
+    std::unique_ptr<TireProps> tire;
+    VehicleParams(int surface) : tire(std::make_unique<TireProps>(surface)) {};
 };
 
 class Plant

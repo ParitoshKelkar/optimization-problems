@@ -181,10 +181,26 @@ double Plant::simulateForward(const double& steering_ang, const std::vector<doub
             double kappa4= this->slip_ratio(Vx4,omega4);
 
             // Tire forces
-            Eigen::Vector2d F1 = this->params.tire.pacjeka_tire_model(alpha1,kappa1,Fz1,false,this->params.epsilon);
-            Eigen::Vector2d F2 = this->params.tire.pacjeka_tire_model(alpha2,kappa2,Fz2,false,this->params.epsilon);
-            Eigen::Vector2d F3 = this->params.tire.pacjeka_tire_model(alpha3,kappa3,Fz3,false,this->params.epsilon);
-            Eigen::Vector2d F4 = this->params.tire.pacjeka_tire_model(alpha4,kappa4,Fz4,false,this->params.epsilon);
+            Eigen::Vector2d F1 = this->params.tire->pacjeka_tire_model(alpha1,kappa1,Fz1,false,this->params.epsilon);
+            Eigen::Vector2d F2 = this->params.tire->pacjeka_tire_model(alpha2,kappa2,Fz2,false,this->params.epsilon);
+            Eigen::Vector2d F3 = this->params.tire->pacjeka_tire_model(alpha3,kappa3,Fz3,false,this->params.epsilon);
+            Eigen::Vector2d F4 = this->params.tire->pacjeka_tire_model(alpha4,kappa4,Fz4,false,this->params.epsilon);
 
-            // Need to rotate front tire forces with steering angle - To be contd..
+            // Need to rotate front tire forces with steering angle
+            F1 = rot1*F1;
+            F2 = rot1*F2;
+
+            // Wheel Dynamics
+            double omegadot1= (torques[0]/2-(this->params.Rw*F1(0)))/this->params.Iw;
+            double omegadot2= (torques[0]/2-(this->params.Rw*F2(0)))/this->params.Iw;
+            double omegadot3= (torques[1]/2-(this->params.Rw*F3(0)))/this->params.Iw;
+            double omegadot4= (torques[1]/2-(this->params.Rw*F4(0)))/this->params.Iw;
+
+            // Net Forces and Moments
+            double Fx= F1(0)+F2(0)+F3(0)+F4(0);
+            double Fy= F1(1)+F2(1)+F3(1)+F4(1);
+            double Mz= this->params.l_f*(F1(1)+F2(1)) + this->params.w*(F2(0)-F1(0)) - this->params.l_r*(F3(1)+F4(1)) - this->params.w*(F4(1)+F3(1));
+
+            //
+
         };
