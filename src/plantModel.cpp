@@ -102,26 +102,23 @@ Eigen::Vector2d TireProps::pacjeka_tire_model(double slip_angle,double slip_rati
 
 Plant::Plant(const VehicleParams& params) : params(params){};
 
-double Plant::sign_sigmoid(double V)
+double Plant::sign_sigmoid(double V) const
 {
     return  -1+(2/(1+std::exp(-this->params.scale*V)));
 };
 
-double Plant::slip_angle(double Vx,double Vy)
+double Plant::slip_angle(double Vx,double Vy) const
 {
     return  std::atan(this->sign_sigmoid(Vx)*Vy/std::sqrt(Vx*Vx+this->params.epsilon));
 };
 
-double Plant::slip_ratio(double Vx,double omega)
+double Plant::slip_ratio(double Vx,double omega) const
 {
     return this->sign_sigmoid(Vx)*(this->params.Rw*omega-Vx)/(std::sqrt(Vx*Vx+this->params.epsilon));
 };
 
-double Plant::simulateForward(const double& steering_ang, const std::vector<double>& torques, const std::vector<double>& feedback)
+std::vector<double> Plant::simulateForward(const double& steering_ang, const std::vector<double>& torques, const std::vector<double>& feedback) const
         {
-            double tau_f = torques[0];
-            double tau_r = torques[1];
-
             // X,Y,psi,Vx,Vy,psiDot,theta,thetaDot,phi,phiDot,
             // omega_FL, omega_FR, omega_RR, omega_RL,
             // alpha_FL, alpha_FR, alpha_RR, alpha_RL
@@ -169,10 +166,10 @@ double Plant::simulateForward(const double& steering_ang, const std::vector<doub
             double alpha3_aux= this->slip_angle(Vx3,Vy3);
             double alpha4_aux= this->slip_angle(Vx4,Vy4);
 
-            double alphadot1= -Vx1/(this->params.sig*(alpha1+alpha1_aux));
-            double alphadot2= -Vx2/(this->params.sig*(alpha2+alpha2_aux));
-            double alphadot3= -Vx3/(this->params.sig*(alpha3+alpha3_aux));
-            double alphadot4= -Vx4/(this->params.sig*(alpha4+alpha4_aux));
+            double alphaDot1= -Vx1/(this->params.sig*(alpha1+alpha1_aux));
+            double alphaDot2= -Vx2/(this->params.sig*(alpha2+alpha2_aux));
+            double alphaDot3= -Vx3/(this->params.sig*(alpha3+alpha3_aux));
+            double alphaDot4= -Vx4/(this->params.sig*(alpha4+alpha4_aux));
 
             // Slip ratios
             double kappa1= this->slip_ratio(Vx1,omega1);
@@ -191,16 +188,119 @@ double Plant::simulateForward(const double& steering_ang, const std::vector<doub
             F2 = rot1*F2;
 
             // Wheel Dynamics
-            double omegadot1= (torques[0]/2-(this->params.Rw*F1(0)))/this->params.Iw;
-            double omegadot2= (torques[0]/2-(this->params.Rw*F2(0)))/this->params.Iw;
-            double omegadot3= (torques[1]/2-(this->params.Rw*F3(0)))/this->params.Iw;
-            double omegadot4= (torques[1]/2-(this->params.Rw*F4(0)))/this->params.Iw;
+            double omegaDot1= (torques[0]/2-(this->params.Rw*F1(0)))/this->params.Iw;
+            double omegaDot2= (torques[0]/2-(this->params.Rw*F2(0)))/this->params.Iw;
+            double omegaDot3= (torques[1]/2-(this->params.Rw*F3(0)))/this->params.Iw;
+            double omegaDot4= (torques[1]/2-(this->params.Rw*F4(0)))/this->params.Iw;
 
             // Net Forces and Moments
             double Fx= F1(0)+F2(0)+F3(0)+F4(0);
             double Fy= F1(1)+F2(1)+F3(1)+F4(1);
             double Mz= this->params.l_f*(F1(1)+F2(1)) + this->params.w*(F2(0)-F1(0)) - this->params.l_r*(F3(1)+F4(1)) - this->params.w*(F4(1)+F3(1));
 
-            //
+            // Angular Accelerations
 
+            double num1= -(tau_phi) + this->params.h*(Fy*cos(phi)*cos(theta)+this->params.m*g*sin(phi)) +
+                psiDot*(this->params.Iyy-this->params.Izz)*(psiDot*sin(phi)*cos(phi)*cos(theta)+ 
+                phiDot*sin(theta)*sin(phi)*cos(phi)) + psiDot*thetaDot*(cos(phi)*cos(phi)*this->params.Iyy+sin(phi)*sin(phi)*this->params.Izz);
+
+            double den1= (this->params.Ixx*cos(theta)*cos(theta)+this->params.Iyy*sin(theta)*sin(theta)*sin(phi)*sin(phi)+
+            this->params.Izz*sin(theta)*sin(theta)*cos(phi)*cos(phi));
+            
+            double phiDDot= num1/den1;
+
+            double num2= -(tau_theta) + this->params.h*(this->params.m*g*sin(theta)*cos(phi)-Fx*cos(theta)*cos(phi)) +
+                psiDot*(psiDot*sin(theta)*cos(theta)*(this->params.Ixx-this->params.Iyy+cos(phi)*cos(phi)*(this->params.Iyy-this->params.Izz))- 
+                phiDot*(cos(theta)*cos(theta)*this->params.Ixx+sin(phi)*sin(phi)*sin(theta)*sin(theta)*this->params.Iyy+
+                sin(theta)*sin(theta)*cos(phi)*cos(phi)*this->params.Izz)- thetaDot*(sin(theta)*sin(phi)*cos(phi)*(this->params.Iyy-this->params.Izz)));
+            
+            double  den2= (this->params.Iyy*cos(phi)*cos(phi)+this->params.Izz*sin(phi)*sin(phi));
+            double thetaDDot= num2/den2;
+
+            double num3= Mz - this->params.h*(Fx*sin(phi)+Fy*sin(theta)*cos(phi));
+            double den3= (this->params.Ixx*sin(theta)*sin(theta)+cos(theta)*cos(theta)*(this->params.Iyy*sin(phi)*sin(phi)+this->params.Izz*cos(phi)*cos(phi)));
+
+            double psiDDot= num3/den3;
+
+            // Net linear accelerations
+            
+            double VxDot= Vy*psiDot + this->params.h*(sin(theta)*cos(phi)*(psiDot*psiDot+phiDot*phiDot+thetaDot*thetaDot)-
+                sin(phi)*psiDDot-2*cos(phi)*phiDot*psiDot-cos(theta)*cos(phi)*thetaDDot+ 
+                2*cos(theta)*sin(phi)*thetaDot*phiDot+sin(theta)*sin(phi)*phiDDot)+Fx/this->params.m;
+
+            double VyDot= -Vx*psiDot + this->params.h*(-sin(theta)*cos(phi)*psiDDot-sin(phi)*psiDot*psiDot - 
+                2*cos(theta)*cos(phi)*thetaDot*psiDot+ sin(theta)*sin(phi)*phiDot*psiDot-sin(phi)*phiDot*phiDot+cos(phi)*phiDDot) + 
+                Fy/this->params.m;
+
+            // 18 States (in order) - Px,Py,Psi,Vx,Vy,PsiDot,Theta,ThetaDot, Phi, ...
+            // PhiDot, omega1,2,3,4, alpha1,2,3,4
+
+            Eigen::Matrix2d rot;
+            
+            rot1 << std::cos(psi), -std::sin(psi),
+                    std::sin(psi), std::cos(psi);
+
+            Eigen::Vector2d Vxy= rot*Eigen::Vector2d(Vx, Vy);
+            Vx= Vxy(1); Vy= Vxy(2);
+            
+            std::vector<double> statesDot;
+            statesDot.reserve(18);
+            
+            statesDot.insert(statesDot.end(),{Vx,Vy,psiDot,VxDot,VyDot,psiDDot,thetaDot,thetaDDot,phiDot,phiDDot,
+                omegaDot1,omegaDot2,omegaDot3,omegaDot4,alphaDot1,alphaDot2,alphaDot3,alphaDot4});
+
+            return statesDot;
         };
+
+Simulation::Simulation(std::vector<double> x0,double control_sampling_time,Plant& plant) : x0(x0),control_sampling_time(control_sampling_time),plant(plant)
+{this->N = int(this->control_sampling_time/this->Ts);};
+
+std::vector<double> Simulation::addVectors(const std::vector<double>& vec1, const std::vector<double>& vec2)
+{
+    std::vector<double> result; result.reserve(vec1.size());
+
+    if(vec1.size()!=vec2.size())
+    {
+        throw std::runtime_error("Cannot add vectors of different sizes");
+    };
+
+    for (int i=0;i<vec1.size();i++)
+    {
+        result.push_back(vec1[i]+vec2[i]);
+    };
+
+    return result;
+};
+
+std::vector<double> Simulation::scalarMultiply(const std::vector<double>& vector, double scalar)
+{
+    std::vector<double> result; result.reserve(vector.size());
+
+    for (int i=0;i<vector.size();i++)
+    {
+        result.push_back(vector[i]*scalar);
+    };
+
+    return result;
+};
+
+void Simulation::propagateDynamics(const double& steering_ang, const std::vector<double>& torques,std::vector<double>& feedback)
+{
+    for (int i =0; i<N;i++)
+    { 
+
+        auto feedbackDot1 = this->plant.simulateForward(steering_ang,torques,feedback);
+
+        auto feedbackDot2 = this->plant.simulateForward(steering_ang,torques,this->addVectors(feedback,this->scalarMultiply(feedbackDot1,this->Ts/2.0)));
+
+        auto feedbackDot3 = this->plant.simulateForward(steering_ang,torques,this->addVectors(feedback,this->scalarMultiply(feedbackDot2,this->Ts/2.0)));
+
+        auto feedbackDot4 = this->plant.simulateForward(steering_ang,torques,this->addVectors(feedback,this->scalarMultiply(feedbackDot3,this->Ts)));
+
+        feedback = this->scalarMultiply(this->addVectors
+            (this->addVectors(feedbackDot1,this->scalarMultiply(feedbackDot2,2.0)),this->addVectors(feedbackDot4,this->scalarMultiply(feedbackDot3,2.0))),1.0/6.0);
+    };
+};
+
+
+

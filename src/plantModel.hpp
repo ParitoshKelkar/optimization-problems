@@ -2,6 +2,7 @@
 #include <Vector>
 #include <cmath>
 #include <memory>
+#include <stdexcept>
 
 const double g = 9.8056;
 
@@ -35,11 +36,26 @@ struct VehicleParams
 class Plant
 {
     private:
-        VehicleParams params; 
-        double sign_sigmoid(double V);
-        double slip_angle(double Vx,double Vy);
-        double slip_ratio(double Vx,double omega);
+        const VehicleParams& params; 
+        double sign_sigmoid(double V) const;
+        double slip_angle(double Vx,double Vy) const;
+        double slip_ratio(double Vx,double omega) const;
     public:
         Plant(const VehicleParams& params);          
-        double simulateForward(const double& steering_ang, const std::vector<double>& torques, const std::vector<double>& feedback);
+        std::vector<double> simulateForward(const double& steering_ang, const std::vector<double>& torques, const std::vector<double>& feedback) const;
+};
+
+class Simulation
+{
+    private:
+        const double Ts = 0.01;
+        const Plant& plant;
+        std::vector<double> x0;
+        double control_sampling_time;
+        int N;
+        std::vector<double> scalarMultiply(const std::vector<double>& vector, double scalar);
+        std::vector<double> addVectors(const std::vector<double>& vec1, const std::vector<double>& vec2);
+    public:
+        Simulation(std::vector<double> x0,double control_sampling_time,Plant& plant);
+        void propagateDynamics(const double& steering_ang, const std::vector<double>& torques,std::vector<double>& feedback);
 };
